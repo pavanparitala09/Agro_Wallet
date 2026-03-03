@@ -1,15 +1,35 @@
 import { useEffect, useState } from 'react';
 import { api, BACKEND_ORIGIN } from '../lib/api.js';
 
-export function AuthPage({ onAuth }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'register' | 'otp'
-  const [otpStep, setOtpStep] = useState('email'); // 'email' | 'verify'
-  const [form, setForm] = useState({
+function isStrongPassword(password) {
+  if (!password || password.length < 8) return false;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  return hasUpper && hasLower && hasNumber && hasSpecial;
+}
+
+export function AuthPage({ onAuth, initialMode = 'login' }) {
+  const [mode, setMode] = useState(initialMode); // 'login' | 'register'
+  const [registerStep, setRegisterStep] = useState('details'); // 'details' | 'verify'
+  const [loginForm, setLoginForm] = useState({
+    email: '',
+    password: ''
+  });
+  const [registerForm, setRegisterForm] = useState({
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     otp: ''
   });
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
+  const [loginPasswordTouched, setLoginPasswordTouched] = useState(false);
+  const [registerPasswordTouched, setRegisterPasswordTouched] = useState(false);
+  const [registerConfirmTouched, setRegisterConfirmTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,43 +42,37 @@ export function AuthPage({ onAuth }) {
     }
   }, []);
 
+  useEffect(() => {
+    setMode(initialMode);
+    setError('');
+    setRegisterStep('details');
+    setRegisterForm({
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      otp: ''
+    });
+    setLoginForm({
+      email: '',
+      password: ''
+    });
+    setLoginPasswordTouched(false);
+    setRegisterPasswordTouched(false);
+    setRegisterConfirmTouched(false);
+  }, [initialMode]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    if (mode === 'otp') {
-      if (otpStep === 'email') {
-        try {
-          const res = await api.post('/auth/request-otp', {
-            email: form.email,
-            name: form.name || undefined
-          });
-          setOtpStep('verify');
-          setError('');
-        } catch (err) {
-          setError(err?.response?.data?.message || 'Failed to send OTP.');
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-      try {
-        const res = await api.post('/auth/verify-otp', {
-          email: form.email,
-          otp: form.otp,
-          name: form.name || undefined
-        });
-        onAuth(res.data);
-      } catch (err) {
-        setError(err?.response?.data?.message || 'Invalid or expired OTP.');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    if (mode === 'login' && form.email === 'demo@example.com' && form.password === 'password123') {
+    // Demo Login credentials
+    if (
+      mode === 'login' &&
+      loginForm.email === 'demo@example.com' &&
+      loginForm.password === 'password123'
+    ) {
       setTimeout(() => {
         onAuth({
           id: 'demo-user-1',
@@ -71,13 +85,58 @@ export function AuthPage({ onAuth }) {
       return;
     }
 
+    // Registration via OTP (single flow: enter details -> send OTP -> verify)
+    if (mode === 'register') {
+      if (registerStep === 'details') {
+        if (!isStrongPassword(registerForm.password)) {
+          setError(
+            'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
+          );
+          setLoading(false);
+          return;
+        }
+
+        if (registerForm.password !== registerForm.confirmPassword) {
+          setError('Password and confirm password must match.');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          await api.post('/auth/request-otp', {
+            email: registerForm.email,
+            name: registerForm.name || undefined
+          });
+          setRegisterStep('verify');
+          setError('');
+        } catch (err) {
+          setError(err?.response?.data?.message || 'Failed to send OTP.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const res = await api.post('/auth/verify-otp', {
+          email: registerForm.email,
+          otp: registerForm.otp,
+          name: registerForm.name || undefined,
+          password: registerForm.password
+        });
+        onAuth(res.data);
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Invalid or expired OTP.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Email/password login
     try {
-      const payload =
-        mode === 'register'
-          ? { name: form.name, email: form.email, password: form.password }
-          : { email: form.email, password: form.password };
-      const url = mode === 'register' ? '/auth/register' : '/auth/login';
-      const res = await api.post(url, payload);
+      const payload = { email: loginForm.email, password: loginForm.password };
+      const res = await api.post('/auth/login', payload);
       onAuth(res.data);
     } catch (err) {
       setError(err?.response?.data?.message || 'Something went wrong. Please try again.');
@@ -93,17 +152,41 @@ export function AuthPage({ onAuth }) {
   function switchMode(newMode) {
     setMode(newMode);
     setError('');
-    setOtpStep('email');
-    setForm((prev) => ({ ...prev, otp: '' }));
+    setRegisterStep('details');
+    setRegisterForm({
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      otp: ''
+    });
   }
 
-  function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  function updateLoginField(field, value) {
+    setLoginForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'password') {
+      setLoginPasswordTouched(true);
+    }
   }
 
-  const isOtpMode = mode === 'otp';
-  const showPassword = !isOtpMode;
-  const showName = mode === 'register' || (isOtpMode && otpStep === 'verify');
+  function updateRegisterField(field, value) {
+    setRegisterForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'password') {
+      setRegisterPasswordTouched(true);
+    }
+    if (field === 'confirmPassword') {
+      setRegisterConfirmTouched(true);
+    }
+  }
+
+  const showPassword = mode === 'login';
+  const showName = mode === 'register';
+  const registerPasswordInvalid =
+    registerPasswordTouched && registerStep === 'details' && !isStrongPassword(registerForm.password);
+  const registerConfirmInvalid =
+    registerConfirmTouched &&
+    registerStep === 'details' &&
+    registerForm.confirmPassword !== registerForm.password;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 px-4">
@@ -142,18 +225,6 @@ export function AuthPage({ onAuth }) {
           >
             Register
           </button>
-          <button
-            type="button"
-            onClick={() => switchMode('otp')}
-            className={
-              'flex-1 rounded-md py-2 text-sm transition-all ' +
-              (mode === 'otp'
-                ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200 font-semibold'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50')
-            }
-          >
-            OTP
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -163,8 +234,8 @@ export function AuthPage({ onAuth }) {
               <input
                 type="text"
                 required={mode === 'register'}
-                value={form.name}
-                onChange={(e) => updateField('name', e.target.value)}
+                value={registerForm.name}
+                onChange={(e) => updateRegisterField('name', e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
                 placeholder="Your name"
               />
@@ -176,9 +247,13 @@ export function AuthPage({ onAuth }) {
             <input
               type="email"
               required
-              value={form.email}
-              onChange={(e) => updateField('email', e.target.value)}
-              disabled={isOtpMode && otpStep === 'verify'}
+              value={mode === 'login' ? loginForm.email : registerForm.email}
+              onChange={(e) =>
+                mode === 'login'
+                  ? updateLoginField('email', e.target.value)
+                  : updateRegisterField('email', e.target.value)
+              }
+              disabled={mode === 'register' && registerStep === 'verify'}
               className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50 disabled:text-slate-500"
               placeholder="you@example.com"
             />
@@ -187,19 +262,169 @@ export function AuthPage({ onAuth }) {
           {showPassword && (
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700">Password</label>
-              <input
-                type="password"
-                required={!isOtpMode}
-                minLength={6}
-                value={form.password}
-                onChange={(e) => updateField('password', e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                placeholder="Enter password"
-              />
+              <div className="relative">
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  required={mode === 'login'}
+                  minLength={6}
+                  value={loginForm.password}
+                  onChange={(e) => updateLoginField('password', e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-10 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="Enter password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    {showLoginPassword ? (
+                      <>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.8}
+                          d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.8}
+                          d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                        />
+                        <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                      </>
+                    )}
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
 
-          {isOtpMode && otpStep === 'verify' && (
+          {mode === 'register' && (
+            <>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">Password</label>
+                <div className="relative">
+                  <input
+                    type={showRegisterPassword ? 'text' : 'password'}
+                    required={registerStep === 'details'}
+                    minLength={8}
+                    value={registerForm.password}
+                    onChange={(e) => updateRegisterField('password', e.target.value)}
+                  className={
+                    'w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none transition-colors ' +
+                    (registerPasswordInvalid
+                      ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                      : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200')
+                  }
+                    placeholder="Create a strong password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                  >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    {showRegisterPassword ? (
+                      <>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.8}
+                          d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.8}
+                          d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                        />
+                        <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                      </>
+                    )}
+                  </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  Enter password again
+                </label>
+                <div className="relative">
+                  <input
+                    type={showRegisterConfirmPassword ? 'text' : 'password'}
+                    required={registerStep === 'details'}
+                    minLength={8}
+                    value={registerForm.confirmPassword}
+                    onChange={(e) => updateRegisterField('confirmPassword', e.target.value)}
+                    className={
+                      'w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none transition-colors ' +
+                      (registerConfirmInvalid
+                        ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                        : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200')
+                    }
+                    placeholder="Re-enter password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterConfirmPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      {showRegisterConfirmPassword ? (
+                        <>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.8}
+                            d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.8}
+                            d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                          />
+                          <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                        </>
+                      )}
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {mode === 'register' && registerStep === 'verify' && (
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-slate-700">
                 Enter 6-digit OTP sent to your email
@@ -209,14 +434,16 @@ export function AuthPage({ onAuth }) {
                 inputMode="numeric"
                 maxLength={6}
                 required
-                value={form.otp}
-                onChange={(e) => updateField('otp', e.target.value.replace(/\D/g, ''))}
+                value={registerForm.otp}
+                onChange={(e) =>
+                  updateRegisterField('otp', e.target.value.replace(/\D/g, ''))
+                }
                 className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-center tracking-[0.5em] font-mono text-lg"
                 placeholder="000000"
               />
               <button
                 type="button"
-                onClick={() => setOtpStep('email')}
+                onClick={() => setRegisterStep('details')}
                 className="text-xs text-emerald-600 hover:text-emerald-700"
               >
                 Change email
@@ -224,12 +451,12 @@ export function AuthPage({ onAuth }) {
             </div>
           )}
 
-          {mode === 'login' && (
+          {/* {mode === 'login' && (
             <div className="rounded-md bg-emerald-50 p-3 text-xs text-emerald-800 border border-emerald-100">
               <p className="font-semibold mb-1">Demo:</p>
               <p>Email: <b>demo@example.com</b> · Password: <b>password123</b></p>
             </div>
-          )}
+          )} */}  
 
           {error && (
             <p className="rounded-md bg-red-50 p-3 text-sm text-red-600 border border-red-100">
@@ -244,13 +471,11 @@ export function AuthPage({ onAuth }) {
           >
             {loading
               ? 'Please wait…'
-              : isOtpMode
-                ? otpStep === 'email'
+              : mode === 'register'
+                ? registerStep === 'details'
                   ? 'Send OTP'
-                  : 'Verify & Sign in'
-                : mode === 'login'
-                  ? 'Sign in'
-                  : 'Create account'}
+                  : 'Verify & Sign up'
+                : 'Sign in'}
           </button>
         </form>
 

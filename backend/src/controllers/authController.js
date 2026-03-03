@@ -1,6 +1,5 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const https = require('https');
 const User = require('../models/User');
 const Otp = require('../models/Otp');
 const { sendOtpEmail } = require('../utils/emailService');
@@ -136,9 +135,18 @@ async function requestOtp(req, res) {
   }
 }
 
+function isStrongPassword(password) {
+  if (!password || password.length < 8) return false;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  return hasUpper && hasLower && hasNumber && hasSpecial;
+}
+
 async function verifyOtp(req, res) {
   try {
-    const { email, otp, name } = req.body;
+    const { email, otp, name, password } = req.body;
     if (!email || !otp) {
       return res.status(400).json({ message: 'Email and OTP are required' });
     }
@@ -169,10 +177,23 @@ async function verifyOtp(req, res) {
       return res.status(400).json({ message: 'Name is required for new account' });
     }
 
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required for new account' });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({
+        message:
+          'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
+      });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
     user = await User.create({
       name: name.trim(),
       email: emailLower,
-      password: null
+      password: hash
     });
     setTokenCookie(res, user._id);
     res.status(201).json({
@@ -186,131 +207,12 @@ async function verifyOtp(req, res) {
   }
 }
 
-function googleAuth(req, res) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-  let redirectUri = process.env.GOOGLE_REDIRECT_URI;
-  if (!redirectUri || redirectUri.includes('5173')) {
-    redirectUri = `${backendUrl}/api/auth/google/callback`;
-  }
-  if (!clientId) {
-    return res.status(500).json({ message: 'Google OAuth not configured' });
-  }
-  const scope = encodeURIComponent('email profile');
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
-  res.redirect(url);
-}
-
-function googleCallback(req, res) {
-  const { code } = req.query;
-  const frontendUrl = process.env.FRONTEND_URL || process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-  let redirectUri = process.env.GOOGLE_REDIRECT_URI;
-  if (!redirectUri || redirectUri.includes('5173')) {
-    redirectUri = `${backendUrl}/api/auth/google/callback`;
-  }
-
-  if (!code) {
-    return res.redirect(`${frontendUrl}?auth_error=no_code`);
-  }
-
-  const postData = new URLSearchParams({
-    code,
-    client_id: process.env.GOOGLE_CLIENT_ID,
-    client_secret: process.env.GOOGLE_CLIENT_SECRET,
-    redirect_uri: redirectUri,
-    grant_type: 'authorization_code'
-  }).toString();
-
-  const options = {
-    hostname: 'oauth2.googleapis.com',
-    path: '/token',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Content-Length': Buffer.byteLength(postData)
-    }
-  };
-
-  const tokenReq = https.request(options, (tokenRes) => {
-    let data = '';
-    tokenRes.on('data', (chunk) => { data += chunk; });
-    tokenRes.on('end', async () => {
-      try {
-        const tokenJson = JSON.parse(data);
-        const accessToken = tokenJson.access_token;
-        if (!accessToken) {
-          return res.redirect(`${frontendUrl}?auth_error=no_token`);
-        }
-
-        const userInfoReq = https.request(
-          {
-            hostname: 'www.googleapis.com',
-            path: '/oauth2/v2/userinfo',
-            headers: { Authorization: `Bearer ${accessToken}` }
-          },
-          (userRes) => {
-            let userData = '';
-            userRes.on('data', (chunk) => { userData += chunk; });
-            userRes.on('end', async () => {
-              try {
-                const profile = JSON.parse(userData);
-                const { email, name, id: googleId } = profile;
-                if (!email) {
-                  return res.redirect(`${frontendUrl}?auth_error=no_email`);
-                }
-
-                let user = await User.findOne({ $or: [{ email }, { googleId }] });
-                if (user) {
-                  if (!user.googleId) {
-                    user.googleId = googleId;
-                    await user.save();
-                  }
-                } else {
-                  user = await User.create({
-                    name: name || email.split('@')[0],
-                    email,
-                    googleId,
-                    password: null
-                  });
-                }
-                setTokenCookie(res, user._id);
-                res.redirect(`${frontendUrl}?auth=success`);
-              } catch (e) {
-                console.error('Google userinfo error:', e.message);
-                res.redirect(`${frontendUrl}?auth_error=parse_error`);
-              }
-            });
-          }
-        );
-        userInfoReq.on('error', (e) => {
-          console.error('Google userinfo request error:', e.message);
-          res.redirect(`${frontendUrl}?auth_error=request_error`);
-        });
-        userInfoReq.end();
-      } catch (e) {
-        console.error('Google token parse error:', e.message);
-        res.redirect(`${frontendUrl}?auth_error=token_error`);
-      }
-    });
-  });
-  tokenReq.on('error', (e) => {
-    console.error('Google token request error:', e.message);
-    res.redirect(`${frontendUrl}?auth_error=request_error`);
-  });
-  tokenReq.write(postData);
-  tokenReq.end();
-}
-
 module.exports = {
+  setTokenCookie,
   register,
   login,
   logout,
   me,
   requestOtp,
-  verifyOtp,
-  googleAuth,
-  googleCallback
+  verifyOtp
 };
-
-

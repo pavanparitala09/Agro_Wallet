@@ -56,7 +56,13 @@ function App() {
   }
 
   if (!user) {
-    return <AuthPage onAuth={setUser} />;
+    return (
+      <Routes>
+        <Route path="/login" element={<AuthPage onAuth={setUser} initialMode="login" />} />
+        <Route path="/register" element={<AuthPage onAuth={setUser} initialMode="register" />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
   }
 
   return (
