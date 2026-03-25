@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
+import { useEffect, useState } from "react";
+import { api } from "../lib/api.js";
+import { Toast } from "../components/Toast.jsx";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -11,33 +12,38 @@ export function BillsPage() {
   const [form, setForm] = useState(() => {
     const t = today();
     return {
-      sectionId: '',
-      title: '',
-      amount: '',
+      sectionId: "",
+      title: "",
+      amount: "",
       billDate: t,
-      status: 'unpaid',
-      paidAmount: '',
-      vendorName: '',
-      notes: '',
+      status: "unpaid",
+      paidAmount: "",
+      vendorName: "",
+      notes: "",
       interestEnabled: false,
-      interestType: 'simple',
-      interestFrequency: 'monthly',
-      interestRate: '',
-      interestStartDate: t
+      interestType: "simple",
+      interestFrequency: "monthly",
+      interestRate: "",
+      interestStartDate: t,
     };
   });
-  const [newSectionName, setNewSectionName] = useState('');
+  const [newSectionName, setNewSectionName] = useState("");
   const [addingSection, setAddingSection] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   const showError = (field) => {
     if (!submitAttempted) return false;
-    if (field === 'amount') return !form.amount && form.amount !== 0;
-    if (field === 'billDate') return !form.billDate;
-    if (field === 'status') return !form.status;
-    if (field === 'interestRate') return form.interestEnabled && (form.interestRate === '' || form.interestRate == null);
+    if (field === "amount") return !form.amount && form.amount !== 0;
+    if (field === "billDate") return !form.billDate;
+    if (field === "status") return !form.status;
+    if (field === "interestRate")
+      return (
+        form.interestEnabled &&
+        (form.interestRate === "" || form.interestRate == null)
+      );
     return false;
   };
 
@@ -45,8 +51,8 @@ export function BillsPage() {
     async function loadInitial() {
       try {
         const [sectionsRes, billsRes] = await Promise.all([
-          api.get('/sections'),
-          api.get('/bills')
+          api.get("/sections"),
+          api.get("/bills"),
         ]);
         setSections(sectionsRes.data || []);
         setBills(billsRes.data || []);
@@ -60,7 +66,7 @@ export function BillsPage() {
 
   async function loadBills() {
     try {
-      const res = await api.get('/bills');
+      const res = await api.get("/bills");
       setBills(res.data || []);
     } catch (_) {
       setBills([]);
@@ -69,7 +75,7 @@ export function BillsPage() {
 
   async function loadSections() {
     try {
-      const res = await api.get('/sections');
+      const res = await api.get("/sections");
       setSections(res.data || []);
     } catch (_) {
       setSections([]);
@@ -82,10 +88,10 @@ export function BillsPage() {
     if (!name) return;
     setAddingSection(true);
     try {
-      const res = await api.post('/sections', { sectionName: name });
+      const res = await api.post("/sections", { sectionName: name });
       await loadSections();
       setForm((prev) => ({ ...prev, sectionId: res.data._id }));
-      setNewSectionName('');
+      setNewSectionName("");
     } catch (_) {
       // error could be shown in UI
     } finally {
@@ -104,53 +110,61 @@ export function BillsPage() {
     const amountInvalid = !form.amount && form.amount !== 0;
     const billDateInvalid = !form.billDate;
     const statusInvalid = !form.status;
-    const interestRateInvalid = form.interestEnabled && (form.interestRate === '' || form.interestRate == null);
-    if (amountInvalid || billDateInvalid || statusInvalid || interestRateInvalid) {
+    const interestRateInvalid =
+      form.interestEnabled &&
+      (form.interestRate === "" || form.interestRate == null);
+    if (
+      amountInvalid ||
+      billDateInvalid ||
+      statusInvalid ||
+      interestRateInvalid
+    ) {
       return;
     }
-    if (!form.sectionId || form.sectionId === '__new__') return;
+    if (!form.sectionId || form.sectionId === "__new__") return;
 
     setSubmitting(true);
     try {
       const data = new FormData();
-      data.append('sectionId', form.sectionId);
-      data.append('title', form.title);
-      data.append('amount', form.amount);
-      data.append('billDate', form.billDate);
-      data.append('status', form.status);
-      if (form.status === 'partial_paid' && form.paidAmount !== '') {
-        data.append('paidAmount', form.paidAmount);
+      data.append("sectionId", form.sectionId);
+      data.append("title", form.title);
+      data.append("amount", form.amount);
+      data.append("billDate", form.billDate);
+      data.append("status", form.status);
+      if (form.status === "partial_paid" && form.paidAmount !== "") {
+        data.append("paidAmount", form.paidAmount);
       }
-      if (form.vendorName) data.append('vendorName', form.vendorName);
-      if (form.notes) data.append('notes', form.notes);
+      if (form.vendorName) data.append("vendorName", form.vendorName);
+      if (form.notes) data.append("notes", form.notes);
       if (form.interestEnabled) {
-        data.append('interestEnabled', 'true');
-        data.append('interestType', form.interestType);
-        data.append('interestFrequency', form.interestFrequency);
-        if (form.interestRate) data.append('interestRate', form.interestRate);
+        data.append("interestEnabled", "true");
+        data.append("interestType", form.interestType);
+        data.append("interestFrequency", form.interestFrequency);
+        if (form.interestRate) data.append("interestRate", form.interestRate);
         if (form.interestStartDate) {
-          data.append('interestStartDate', form.interestStartDate);
+          data.append("interestStartDate", form.interestStartDate);
         }
       }
       if (imageFile) {
-        data.append('image', imageFile);
+        data.append("image", imageFile);
       }
 
-      await api.post('/bills', data, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      await api.post("/bills", data, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
+      setToastMessage("Bill added successfully! ✓");
       setSubmitAttempted(false);
       setForm((prev) => ({
         ...prev,
-        title: '',
-        amount: '',
+        title: "",
+        amount: "",
         billDate: today(),
-        vendorName: '',
-        notes: '',
-        interestRate: '',
+        vendorName: "",
+        notes: "",
+        interestRate: "",
         interestStartDate: today(),
-        paidAmount: ''
+        paidAmount: "",
       }));
       setImageFile(null);
       await loadBills();
@@ -161,9 +175,11 @@ export function BillsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Add Bills</h2>
-        <p className="text-xs text-slate-500">
+      <div className="rounded-lg border-2 border-primary-700 bg-white p-5 md:p-6 shadow-lg">
+        <h2 className="text-2xl md:text-3xl font-black text-slate-700">
+          ➕ Add Bills
+        </h2>
+        <p className="text-base font-semibold text-slate-800 mt-2">
           Create new bills, set interest and track credit entries.
         </p>
       </div>
@@ -172,22 +188,22 @@ export function BillsPage() {
       <div className="grid gap-4 lg:grid-cols-[1.1fr_minmax(0,1fr)]">
         <form
           onSubmit={handleCreateBill}
-          className="space-y-3 rounded-xl bg-white p-4 shadow-sm"
+          className="space-y-4 rounded-xl bg-white p-4 md:p-5 shadow-sm"
         >
-          <h3 className="text-sm font-semibold text-slate-900">
+          <h3 className="text-base md:text-lg font-bold text-slate-900">
             Create New Bill
           </h3>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-slate-700">
                 Section
               </label>
               <select
-                required={form.sectionId !== '__new__'}
+                required={form.sectionId !== "__new__"}
                 value={form.sectionId}
-                onChange={(e) => updateForm('sectionId', e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                onChange={(e) => updateForm("sectionId", e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               >
                 <option value="">Select section</option>
                 {sections.map((s) => (
@@ -197,14 +213,14 @@ export function BillsPage() {
                 ))}
                 <option value="__new__">+ Create new section</option>
               </select>
-              {form.sectionId === '__new__' && (
+              {form.sectionId === "__new__" && (
                 <div className="mt-2 flex gap-2">
                   <input
                     type="text"
                     value={newSectionName}
                     onChange={(e) => setNewSectionName(e.target.value)}
                     placeholder="New section name"
-                    className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                    className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   />
                   <button
                     type="button"
@@ -212,7 +228,7 @@ export function BillsPage() {
                     disabled={addingSection || !newSectionName.trim()}
                     className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {addingSection ? 'Adding…' : 'Add'}
+                    {addingSection ? "Adding…" : "Add"}
                   </button>
                 </div>
               )}
@@ -220,9 +236,8 @@ export function BillsPage() {
 
             <TextInput
               label="Title"
-              required
               value={form.title}
-              onChange={(v) => updateForm('title', v)}
+              onChange={(v) => updateForm("title", v)}
             />
           </div>
 
@@ -232,16 +247,16 @@ export function BillsPage() {
               type="number"
               required
               value={form.amount}
-              onChange={(v) => updateForm('amount', v)}
-              error={showError('amount')}
+              onChange={(v) => updateForm("amount", v)}
+              error={showError("amount")}
             />
             <TextInput
               label="Bill Date"
               type="date"
               required
               value={form.billDate}
-              onChange={(v) => updateForm('billDate', v)}
-              error={showError('billDate')}
+              onChange={(v) => updateForm("billDate", v)}
+              error={showError("billDate")}
             />
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-slate-700">
@@ -249,12 +264,12 @@ export function BillsPage() {
               </label>
               <select
                 value={form.status}
-                onChange={(e) => updateForm('status', e.target.value)}
+                onChange={(e) => updateForm("status", e.target.value)}
                 className={
-                  'w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 ' +
-                  (showError('status')
-                    ? 'border-red-500 bg-red-50/50 focus:border-red-500 focus:ring-red-200'
-                    : 'border-slate-200 focus:border-primary-500 focus:ring-primary-500')
+                  "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 " +
+                  (showError("status")
+                    ? "border-red-500 bg-red-50/50 focus:border-red-500 focus:ring-red-200"
+                    : "border-slate-200 focus:border-primary-500 focus:ring-primary-500")
                 }
               >
                 <option value="unpaid">Unpaid</option>
@@ -264,13 +279,13 @@ export function BillsPage() {
             </div>
           </div>
 
-          {form.status === 'partial_paid' && (
+          {form.status === "partial_paid" && (
             <TextInput
               label="Amount paid (₹)"
               type="number"
               required
               value={form.paidAmount}
-              onChange={(v) => updateForm('paidAmount', v)}
+              onChange={(v) => updateForm("paidAmount", v)}
               placeholder="0"
             />
           )}
@@ -279,21 +294,29 @@ export function BillsPage() {
             <TextInput
               label="Vendor Name (optional)"
               value={form.vendorName}
-              onChange={(v) => updateForm('vendorName', v)}
+              onChange={(v) => updateForm("vendorName", v)}
             />
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-slate-700">
                 Bill Image (optional)
               </label>
+              {imageFile && (
+                <div className="flex gap-2 items-center mb-2">
+                  <img
+                    src={URL.createObjectURL(imageFile)}
+                    alt="Preview"
+                    className="h-16 w-16 rounded-lg object-cover border border-slate-200"
+                  />
+                  <span className="text-xs text-slate-500">Preview</span>
+                </div>
+              )}
               <input
                 type="file"
                 accept="image/*"
                 onChange={(e) => setImageFile(e.target.files?.[0] || null)}
                 className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-100"
               />
-              <p className="text-[10px] text-slate-400">
-                Max size 5MB. Stored locally in development.
-              </p>
+              <p className="text-[10px] text-slate-400">Max size 5MB.</p>
             </div>
           </div>
 
@@ -304,7 +327,7 @@ export function BillsPage() {
             <textarea
               rows={2}
               value={form.notes}
-              onChange={(e) => updateForm('notes', e.target.value)}
+              onChange={(e) => updateForm("notes", e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               placeholder="Any remarks about this bill…"
             />
@@ -318,7 +341,7 @@ export function BillsPage() {
                   type="checkbox"
                   checked={form.interestEnabled}
                   onChange={(e) =>
-                    updateForm('interestEnabled', e.target.checked)
+                    updateForm("interestEnabled", e.target.checked)
                   }
                   className="h-3.5 w-3.5 rounded border-primary-400 text-primary-600 focus:ring-primary-500"
                 />
@@ -337,9 +360,7 @@ export function BillsPage() {
                   </label>
                   <select
                     value={form.interestType}
-                    onChange={(e) =>
-                      updateForm('interestType', e.target.value)
-                    }
+                    onChange={(e) => updateForm("interestType", e.target.value)}
                     className="w-full rounded-lg border border-primary-100 bg-white px-2 py-1.5 text-xs outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   >
                     <option value="simple">Simple</option>
@@ -353,7 +374,7 @@ export function BillsPage() {
                   <select
                     value={form.interestFrequency}
                     onChange={(e) =>
-                      updateForm('interestFrequency', e.target.value)
+                      updateForm("interestFrequency", e.target.value)
                     }
                     className="w-full rounded-lg border border-primary-100 bg-white px-2 py-1.5 text-xs outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   >
@@ -365,14 +386,14 @@ export function BillsPage() {
                   label="Rate % per period"
                   type="number"
                   value={form.interestRate}
-                  onChange={(v) => updateForm('interestRate', v)}
-                  error={showError('interestRate')}
+                  onChange={(v) => updateForm("interestRate", v)}
+                  error={showError("interestRate")}
                 />
                 <TextInput
                   label="Start Date"
                   type="date"
                   value={form.interestStartDate}
-                  onChange={(v) => updateForm('interestStartDate', v)}
+                  onChange={(v) => updateForm("interestStartDate", v)}
                 />
               </div>
             )}
@@ -381,10 +402,12 @@ export function BillsPage() {
           <div className="pt-1">
             <button
               type="submit"
-              disabled={submitting || !form.sectionId || form.sectionId === '__new__'}
+              disabled={
+                submitting || !form.sectionId || form.sectionId === "__new__"
+              }
               className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-slate-800 disabled:opacity-60"
             >
-              {submitting ? 'Saving…' : 'Save Bill'}
+              {submitting ? "Saving…" : "Save Bill"}
             </button>
           </div>
         </form>
@@ -409,47 +432,49 @@ export function BillsPage() {
                   <div className="font-semibold">{b.title}</div>
                   <span
                     className={
-                      'rounded-full px-2 py-0.5 text-[10px] font-semibold ' +
-                      (b.status === 'paid'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : b.status === 'partial_paid'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-rose-100 text-rose-700')
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold " +
+                      (b.status === "paid"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : b.status === "partial_paid"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-rose-100 text-rose-700")
                     }
                   >
-                    {b.status === 'paid' ? 'Paid' : b.status === 'partial_paid' ? 'Partial Paid' : 'Unpaid'}
+                    {b.status === "paid"
+                      ? "Paid"
+                      : b.status === "partial_paid"
+                        ? "Partial Paid"
+                        : "Unpaid"}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-1">
                   <div className="space-x-2">
                     <span className="font-semibold text-slate-900">
-                      {b.status === 'partial_paid' && b.amountDue != null
+                      {b.status === "partial_paid" && b.amountDue != null
                         ? `₹${Number(b.amountDue).toFixed(2)} due`
                         : `₹${(b.totalPayable || b.amount || 0).toFixed(2)}`}
                     </span>
                     <span className="text-[10px] text-slate-500">
                       Principal ₹{(b.amount || 0).toFixed(2)}
-                      {b.status === 'partial_paid' && b.paidAmount > 0 && (
+                      {b.status === "partial_paid" && b.paidAmount > 0 && (
                         <> · Paid ₹{Number(b.paidAmount).toFixed(2)}</>
                       )}
-                      {' · '}Interest ₹{(b.calculatedInterest || 0).toFixed(2)}
+                      {" · "}Interest ₹{(b.calculatedInterest || 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="text-[10px] text-slate-500">
                     {b.sectionId?.sectionName && (
-                      <span className="mr-2">
-                        {b.sectionId.sectionName}
-                      </span>
+                      <span className="mr-2">{b.sectionId.sectionName}</span>
                     )}
                     {b.vendorName && <span>• {b.vendorName}</span>}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-500">
                   <span>
-                    Bill:{' '}
+                    Bill:{" "}
                     {b.billDate
                       ? new Date(b.billDate).toISOString().slice(0, 10)
-                      : '-'}
+                      : "-"}
                   </span>
                   {b.imageUrl && (
                     <a
@@ -467,6 +492,14 @@ export function BillsPage() {
           </div>
         </div>
       </div>
+
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          type="success"
+          onClose={() => setToastMessage("")}
+        />
+      )}
     </div>
   );
 }
@@ -475,10 +508,10 @@ function TextInput({
   label,
   value,
   onChange,
-  type = 'text',
+  type = "text",
   required,
   placeholder,
-  error
+  error,
 }) {
   return (
     <div className="space-y-1.5">
@@ -492,13 +525,12 @@ function TextInput({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className={
-          'w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 ' +
+          "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 " +
           (error
-            ? 'border-red-500 bg-red-50/50 focus:border-red-500 focus:ring-red-200'
-            : 'border-slate-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500')
+            ? "border-red-500 bg-red-50/50 focus:border-red-500 focus:ring-red-200"
+            : "border-slate-200 focus:border-primary-500 focus:ring-1 focus:ring-primary-500")
         }
       />
     </div>
   );
 }
-

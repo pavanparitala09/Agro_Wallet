@@ -20,7 +20,6 @@ const billSchema = new mongoose.Schema(
     },
     title: {
       type: String,
-      required: true,
       trim: true
     },
     amount: {

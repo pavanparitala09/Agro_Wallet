@@ -30,6 +30,7 @@ function calculateInterestForBill(bill, now = new Date()) {
     amount
   } = bill;
 
+
   if (!interestEnabled || !interestStartDate || !interestRate) {
     return {
       interest: 0,
@@ -39,7 +40,7 @@ function calculateInterestForBill(bill, now = new Date()) {
 
   const startDate = new Date(interestStartDate);
   const endDate =
-    status === 'paid' && completedAt ? new Date(completedAt) : now;
+    status === 'paid' && completedAt ? new Date() : now;
 
   const periods = calculateDateDiff(startDate, endDate, interestFrequency);
   const r = interestRate / 100; // percentage per period
@@ -53,6 +54,7 @@ function calculateInterestForBill(bill, now = new Date()) {
   }
 
   const interest = total - amount;
+  
 
   return {
     interest: round2(interest),

@@ -3,7 +3,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/User');
 
 function buildCallbackURL() {
-  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+  const backendUrl = process.env.BACKEND_URL;
   let redirectUri = process.env.GOOGLE_REDIRECT_URI;
 
   if (!redirectUri || redirectUri.includes('5173')) {

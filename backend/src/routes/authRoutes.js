@@ -7,7 +7,9 @@ const {
   logout,
   me,
   requestOtp,
-  verifyOtp
+  verifyOtp,
+  requestPasswordResetOtp,
+  resetPasswordWithOtp
 } = require('../controllers/authController');
 const { authRequired } = require('../middleware/authMiddleware');
 
@@ -20,6 +22,8 @@ router.get('/me', authRequired, me);
 
 router.post('/request-otp', requestOtp);
 router.post('/verify-otp', verifyOtp);
+router.post('/forgot-password/request-otp', requestPasswordResetOtp);
+router.post('/forgot-password/reset', resetPasswordWithOtp);
 
 router.get(
   '/google',

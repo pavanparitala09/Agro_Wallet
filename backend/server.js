@@ -25,9 +25,6 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
 
-// Static folder for uploaded images (development)
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
 const MONGO_URI = process.env.MONGO_URI;
 const PORT = process.env.PORT;
 

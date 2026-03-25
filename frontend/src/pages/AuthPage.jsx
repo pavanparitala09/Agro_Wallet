@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, BACKEND_ORIGIN } from '../lib/api.js';
 
 function isStrongPassword(password) {
@@ -11,6 +12,7 @@ function isStrongPassword(password) {
 }
 
 export function AuthPage({ onAuth, initialMode = 'login' }) {
+  const navigate = useNavigate();
   const [mode, setMode] = useState(initialMode); // 'login' | 'register'
   const [registerStep, setRegisterStep] = useState('details'); // 'details' | 'verify'
   const [loginForm, setLoginForm] = useState({
@@ -30,6 +32,13 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
   const [loginPasswordTouched, setLoginPasswordTouched] = useState(false);
   const [registerPasswordTouched, setRegisterPasswordTouched] = useState(false);
   const [registerConfirmTouched, setRegisterConfirmTouched] = useState(false);
+  const [forgotStep, setForgotStep] = useState('none'); // 'none' | 'email' | 'reset'
+  const [forgotForm, setForgotForm] = useState({
+    email: '',
+    otp: '',
+    password: '',
+    confirmPassword: ''
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -60,6 +69,13 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
     setLoginPasswordTouched(false);
     setRegisterPasswordTouched(false);
     setRegisterConfirmTouched(false);
+    setForgotStep('none');
+    setForgotForm({
+      email: '',
+      otp: '',
+      password: '',
+      confirmPassword: ''
+    });
   }, [initialMode]);
 
   async function handleSubmit(e) {
@@ -68,21 +84,85 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
     setError('');
 
     // Demo Login credentials
-    if (
-      mode === 'login' &&
-      loginForm.email === 'demo@example.com' &&
-      loginForm.password === 'password123'
-    ) {
-      setTimeout(() => {
-        onAuth({
-          id: 'demo-user-1',
-          name: 'Demo Farmer',
-          email: 'demo@example.com',
-          role: 'farmer'
-        });
-        setLoading(false);
-      }, 600);
-      return;
+    if (forgotStep === 'none') {
+      if (
+        mode === 'login' &&
+        loginForm.email === 'demo@example.com' &&
+        loginForm.password === 'password123'
+      ) {
+        setTimeout(() => {
+          onAuth({
+            id: 'demo-user-1',
+            name: 'Demo Farmer',
+            email: 'demo@example.com',
+            role: 'farmer'
+          });
+          setLoading(false);
+        }, 600);
+        return;
+      }
+    }
+
+    // Forgot password flow (login only)
+    if (mode === 'login' && forgotStep !== 'none') {
+      if (forgotStep === 'email') {
+        try {
+          const emailToUse = forgotForm.email || loginForm.email;
+          if (!emailToUse) {
+            setError('Please enter your email.');
+            setLoading(false);
+            return;
+          }
+          await api.post('/auth/forgot-password/request-otp', {
+            email: emailToUse
+          });
+          setForgotForm((prev) => ({ ...prev, email: emailToUse }));
+          setForgotStep('reset');
+          setError('');
+        } catch (err) {
+          setError(err?.response?.data?.message || 'Failed to send OTP.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (forgotStep === 'reset') {
+        if (!isStrongPassword(forgotForm.password)) {
+          setError(
+            'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.'
+          );
+          setLoading(false);
+          return;
+        }
+
+        if (forgotForm.password !== forgotForm.confirmPassword) {
+          setError('Password and confirm password must match.');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          await api.post('/auth/forgot-password/reset', {
+            email: forgotForm.email,
+            otp: forgotForm.otp,
+            password: forgotForm.password
+          });
+          setError('Password updated successfully. Please login with your new password.');
+          setForgotStep('none');
+          setForgotForm({
+            email: '',
+            otp: '',
+            password: '',
+            confirmPassword: ''
+          });
+        } catch (err) {
+          setError(err?.response?.data?.message || 'Failed to reset password.');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
     }
 
     // Registration via OTP (single flow: enter details -> send OTP -> verify)
@@ -150,16 +230,11 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
   }
 
   function switchMode(newMode) {
-    setMode(newMode);
-    setError('');
-    setRegisterStep('details');
-    setRegisterForm({
-      name: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-      otp: ''
-    });
+    if (newMode === 'login') {
+      navigate('/login');
+    } else {
+      navigate('/register');
+    }
   }
 
   function updateLoginField(field, value) {
@@ -228,235 +303,411 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {showName && (
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Name</label>
-              <input
-                type="text"
-                required={mode === 'register'}
-                value={registerForm.name}
-                onChange={(e) => updateRegisterField('name', e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                placeholder="Your name"
-              />
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-700">Email</label>
-            <input
-              type="email"
-              required
-              value={mode === 'login' ? loginForm.email : registerForm.email}
-              onChange={(e) =>
-                mode === 'login'
-                  ? updateLoginField('email', e.target.value)
-                  : updateRegisterField('email', e.target.value)
-              }
-              disabled={mode === 'register' && registerStep === 'verify'}
-              className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50 disabled:text-slate-500"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          {showPassword && (
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">Password</label>
-              <div className="relative">
-                <input
-                  type={showLoginPassword ? 'text' : 'password'}
-                  required={mode === 'login'}
-                  minLength={6}
-                  value={loginForm.password}
-                  onChange={(e) => updateLoginField('password', e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-10 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                  placeholder="Enter password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowLoginPassword((prev) => !prev)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    {showLoginPassword ? (
-                      <>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
-                        />
-                        <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
-                      </>
-                    )}
-                  </svg>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {mode === 'register' && (
-            <>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-slate-700">Password</label>
-                <div className="relative">
-                  <input
-                    type={showRegisterPassword ? 'text' : 'password'}
-                    required={registerStep === 'details'}
-                    minLength={8}
-                    value={registerForm.password}
-                    onChange={(e) => updateRegisterField('password', e.target.value)}
-                  className={
-                    'w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none transition-colors ' +
-                    (registerPasswordInvalid
-                      ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
-                      : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200')
-                  }
-                    placeholder="Create a strong password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegisterPassword((prev) => !prev)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
-                  >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    {showRegisterPassword ? (
-                      <>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
-                        />
-                        <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
-                      </>
-                    )}
-                  </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-slate-700">
-                  Enter password again
-                </label>
-                <div className="relative">
-                  <input
-                    type={showRegisterConfirmPassword ? 'text' : 'password'}
-                    required={registerStep === 'details'}
-                    minLength={8}
-                    value={registerForm.confirmPassword}
-                    onChange={(e) => updateRegisterField('confirmPassword', e.target.value)}
-                    className={
-                      'w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none transition-colors ' +
-                      (registerConfirmInvalid
-                        ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
-                        : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200')
-                    }
-                    placeholder="Re-enter password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegisterConfirmPassword((prev) => !prev)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      {showRegisterConfirmPassword ? (
-                        <>
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.8}
-                            d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.8}
-                            d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
-                          />
-                          <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
-                        </>
-                      )}
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {mode === 'register' && registerStep === 'verify' && (
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-700">
-                Enter 6-digit OTP sent to your email
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                required
-                value={registerForm.otp}
-                onChange={(e) =>
-                  updateRegisterField('otp', e.target.value.replace(/\D/g, ''))
-                }
-                className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-center tracking-[0.5em] font-mono text-lg"
-                placeholder="000000"
-              />
+          {mode === 'login' && forgotStep === 'none' && (
+            <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => setRegisterStep('details')}
-                className="text-xs text-emerald-600 hover:text-emerald-700"
+                onClick={() => {
+                  setError('');
+                  setForgotStep('email');
+                  setForgotForm((prev) => ({
+                    ...prev,
+                    email: loginForm.email
+                  }));
+                }}
+                className="text-xs font-medium text-emerald-700 hover:text-emerald-800 cursor-pointer"
               >
-                Change email
+                Forgot password?
               </button>
             </div>
           )}
 
-          {/* {mode === 'login' && (
-            <div className="rounded-md bg-emerald-50 p-3 text-xs text-emerald-800 border border-emerald-100">
-              <p className="font-semibold mb-1">Demo:</p>
-              <p>Email: <b>demo@example.com</b> · Password: <b>password123</b></p>
-            </div>
-          )} */}  
+          {mode === 'login' && forgotStep !== 'none' && (
+            <>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  Enter your email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={forgotForm.email}
+                  onChange={(e) =>
+                    setForgotForm((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  placeholder="you@example.com"
+                  disabled={forgotStep === 'reset'}
+                />
+              </div>
+
+              {forgotStep === 'reset' && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">
+                      Enter 6-digit OTP sent to your email
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      required
+                      value={forgotForm.otp}
+                      onChange={(e) =>
+                        setForgotForm((prev) => ({
+                          ...prev,
+                          otp: e.target.value.replace(/\D/g, '')
+                        }))
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-center tracking-[0.5em] font-mono text-lg"
+                      placeholder="000000"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">
+                      New password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showRegisterPassword ? 'text' : 'password'}
+                        required
+                        minLength={8}
+                        value={forgotForm.password}
+                        onChange={(e) =>
+                          setForgotForm((prev) => ({
+                            ...prev,
+                            password: e.target.value
+                          }))
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-10 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                        placeholder="Create a strong password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegisterPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          {showRegisterPassword ? (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                              />
+                              <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">
+                      Enter new password again
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showRegisterConfirmPassword ? 'text' : 'password'}
+                        required
+                        minLength={8}
+                        value={forgotForm.confirmPassword}
+                        onChange={(e) =>
+                          setForgotForm((prev) => ({
+                            ...prev,
+                            confirmPassword: e.target.value
+                          }))
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-10 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                        placeholder="Re-enter password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowRegisterConfirmPassword((prev) => !prev)
+                        }
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          {showRegisterConfirmPassword ? (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                              />
+                              <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {!(mode === 'login' && forgotStep !== 'none') && (
+            <>
+              {showName && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">Name</label>
+                  <input
+                    type="text"
+                    required={mode === 'register'}
+                    value={registerForm.name}
+                    onChange={(e) => updateRegisterField('name', e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                    placeholder="Your name"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={mode === 'login' ? loginForm.email : registerForm.email}
+                  onChange={(e) =>
+                    mode === 'login'
+                      ? updateLoginField('email', e.target.value)
+                      : updateRegisterField('email', e.target.value)
+                  }
+                  disabled={mode === 'register' && registerStep === 'verify'}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50 disabled:text-slate-500"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              {showPassword && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showLoginPassword ? 'text' : 'password'}
+                      required={mode === 'login'}
+                      minLength={6}
+                      value={loginForm.password}
+                      onChange={(e) => updateLoginField('password', e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-4 py-2.5 pr-10 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                      placeholder="Enter password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        {showLoginPassword ? (
+                          <>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.8}
+                              d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.8}
+                              d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                            />
+                            <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                          </>
+                        )}
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {mode === 'register' && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">Password</label>
+                    <div className="relative">
+                      <input
+                        type={showRegisterPassword ? 'text' : 'password'}
+                        required={registerStep === 'details'}
+                        minLength={8}
+                        value={registerForm.password}
+                        onChange={(e) => updateRegisterField('password', e.target.value)}
+                        className={
+                          'w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none transition-colors ' +
+                          (registerPasswordInvalid
+                            ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                            : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200')
+                        }
+                        placeholder="Create a strong password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegisterPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          {showRegisterPassword ? (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4.5-6.5-10-6.5-1.237 0-2.36.128-3.37.372"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                              />
+                              <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">
+                      Enter password again
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showRegisterConfirmPassword ? 'text' : 'password'}
+                        required={registerStep === 'details'}
+                        minLength={8}
+                        value={registerForm.confirmPassword}
+                        onChange={(e) => updateRegisterField('confirmPassword', e.target.value)}
+                        className={
+                          'w-full rounded-lg border px-4 py-2.5 pr-10 text-sm outline-none transition-colors ' +
+                          (registerConfirmInvalid
+                            ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                            : 'border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200')
+                        }
+                        placeholder="Re-enter password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegisterConfirmPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          {showRegisterConfirmPassword ? (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M3 3l18 18M10.477 10.489A3 3 0 0012 15a3 3 0 002.533-4.567M9.88 9.88L7.05 7.05M9.88 9.88C10.582 9.178 11.527 8.75 12.5 8.75c.473 0 .927.093 1.342.262M6.228 6.228C4.358 7.343 2.96 8.98 2 12c1.5 4 4.5 6.5 10 6.5 1.86 0 3.442-.313 4.772-.892M17.772 17.772C19.642 16.657 21.04 15.02 22 12c-1.5-4-4-5-10-6.5-1.237 0-2.36.128-3.37.372"
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.8}
+                                d="M2 12s2.5-6.5 10-6.5S22 12 22 12s-2.5 6.5-10 6.5S2 12 2 12z"
+                              />
+                              <circle cx="12" cy="12" r="3" strokeWidth={1.8} />
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {mode === 'register' && registerStep === 'verify' && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Enter 6-digit OTP sent to your email
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    value={registerForm.otp}
+                    onChange={(e) =>
+                      updateRegisterField('otp', e.target.value.replace(/\D/g, ''))
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-center tracking-[0.5em] font-mono text-lg"
+                    placeholder="000000"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setRegisterStep('details')}
+                    className="text-xs text-emerald-600 hover:text-emerald-700"
+                  >
+                    Change email
+                  </button>
+                </div>
+              )}
+            </>
+          )}
 
           {error && (
             <p className="rounded-md bg-red-50 p-3 text-sm text-red-600 border border-red-100">
@@ -471,11 +722,15 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
           >
             {loading
               ? 'Please wait…'
-              : mode === 'register'
-                ? registerStep === 'details'
-                  ? 'Send OTP'
-                  : 'Verify & Sign up'
-                : 'Sign in'}
+              : mode === 'login' && forgotStep === 'email'
+                ? 'Send OTP'
+                : mode === 'login' && forgotStep === 'reset'
+                  ? 'Reset password'
+                  : mode === 'register'
+                    ? registerStep === 'details'
+                      ? 'Send OTP'
+                      : 'Verify & Sign up'
+                    : 'Sign in'}
           </button>
         </form>
 
