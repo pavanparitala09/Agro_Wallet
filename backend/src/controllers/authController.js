@@ -13,8 +13,8 @@ function setTokenCookie(res, userId) {
 
   res.cookie('token', token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none',  // Changed from 'lax' to 'none'
+    secure: true,      // Must be true when sameSite is 'none'
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
 }
