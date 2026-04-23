@@ -17,10 +17,11 @@ const app = express();
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      callback(null, true); // ❌ Problem: allows ANY origin
-    },
-    credentials: true, // ✓ Correct: allows credentials (cookies)
+    origin:
+      process.env.FRONTEND_URL ||
+      process.env.FRONTEND_ORIGIN ||
+      "http://localhost:5173",
+    credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
