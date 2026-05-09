@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
+import { useTranslation } from "react-i18next";
 
 export function EditPage() {
+  const { t } = useTranslation();
   const [bills, setBills] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -130,7 +132,7 @@ export function EditPage() {
     <div className="space-y-4">
       <div className="rounded-lg border-2 border-primary-700 bg-white p-5 md:p-6 shadow-lg">
         <h2 className="text-2xl md:text-3xl font-black text-slate-700">
-          ✏️ Edit Entries
+          ✏️ {t("layout.editEntries")}
         </h2>
         <p className="text-base font-semibold text-slate-800 mt-2">
           Recently created bills with edit history badges.

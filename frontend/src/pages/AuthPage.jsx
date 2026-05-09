@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, BACKEND_ORIGIN } from '../lib/api.js';
+import { useTranslation } from 'react-i18next';
 
 function isStrongPassword(password) {
   if (!password || password.length < 8) return false;
@@ -13,6 +14,13 @@ function isStrongPassword(password) {
 
 export function AuthPage({ onAuth, initialMode = 'login' }) {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
+
+  const changeLanguage = (lng) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem('appLanguage', lng);
+  };
+
   const [mode, setMode] = useState(initialMode); // 'login' | 'register'
   const [registerStep, setRegisterStep] = useState('details'); // 'details' | 'verify'
   const [loginForm, setLoginForm] = useState({
@@ -264,14 +272,24 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
     registerForm.confirmPassword !== registerForm.password;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-emerald-100 to-teal-50 px-4 relative">
+      <div className="absolute top-4 right-4">
+        <select 
+          className="bg-white/80 text-slate-800 text-sm rounded px-2 py-1 border border-emerald-200 outline-none cursor-pointer shadow-sm"
+          value={i18n.language}
+          onChange={(e) => changeLanguage(e.target.value)}
+        >
+          <option value="en">English</option>
+          <option value="te">తెలుగు</option>
+        </select>
+      </div>
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl border border-emerald-100">
         <div className="mb-6 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Rural <span className="text-emerald-600">Ledger</span>
+            {t("layout.ruralLedger").split(" ")[0]} <span className="text-emerald-600">{t("layout.ruralLedger").split(" ").slice(1).join(" ")}</span>
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Smart bill &amp; interest tracker for farmers &amp; shopkeepers
+            {t("auth.subtitle")}
           </p>
         </div>
 
@@ -286,7 +304,7 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50')
             }
           >
-            Login
+            {t("auth.login")}
           </button>
           <button
             type="button"
@@ -298,7 +316,7 @@ export function AuthPage({ onAuth, initialMode = 'login' }) {
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50')
             }
           >
-            Register
+            {t("auth.register")}
           </button>
         </div>
 

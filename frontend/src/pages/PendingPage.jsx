@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api.js";
+import { useTranslation } from "react-i18next";
 
 export function PendingPage() {
+  const { t } = useTranslation();
   const [sections, setSections] = useState([]);
   const [bills, setBills] = useState([]);
   const [filters, setFilters] = useState({
@@ -98,7 +100,7 @@ export function PendingPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex-1">
             <h2 className="text-2xl md:text-3xl font-black text-slate-700">
-              ⏳ Pending Bills
+              ⏳ {t("layout.pending")}
             </h2>
             <p className="text-base font-semibold text-slate-800 mt-2">
               Only unpaid bills with live interest calculation.

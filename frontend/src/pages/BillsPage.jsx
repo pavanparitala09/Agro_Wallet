@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { Toast } from "../components/Toast.jsx";
+import { useTranslation } from "react-i18next";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
 export function BillsPage() {
+  const { t } = useTranslation();
   const [sections, setSections] = useState([]);
   const [bills, setBills] = useState([]);
   const [form, setForm] = useState(() => {
@@ -177,7 +179,7 @@ export function BillsPage() {
     <div className="space-y-4">
       <div className="rounded-lg border-2 border-primary-700 bg-white p-5 md:p-6 shadow-lg">
         <h2 className="text-2xl md:text-3xl font-black text-slate-700">
-          ➕ Add Bills
+          ➕ {t("layout.addBills")}
         </h2>
         <p className="text-base font-semibold text-slate-800 mt-2">
           Create new bills, set interest and track credit entries.
@@ -191,13 +193,13 @@ export function BillsPage() {
           className="space-y-4 rounded-xl bg-white p-4 md:p-5 shadow-sm"
         >
           <h3 className="text-base md:text-lg font-bold text-slate-900">
-            Create New Bill
+            {t("bills.addBill")}
           </h3>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-slate-700">
-                Section
+                {t("bills.section")}
               </label>
               <select
                 required={form.sectionId !== "__new__"}
@@ -205,13 +207,13 @@ export function BillsPage() {
                 onChange={(e) => updateForm("sectionId", e.target.value)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
               >
-                <option value="">Select section</option>
+                <option value="">{t("bills.selectSection")}</option>
                 {sections.map((s) => (
                   <option key={s._id} value={s._id}>
                     {s.sectionName}
                   </option>
                 ))}
-                <option value="__new__">+ Create new section</option>
+                <option value="__new__">{t("bills.createNewSection")}</option>
               </select>
               {form.sectionId === "__new__" && (
                 <div className="mt-2 flex gap-2">
@@ -219,7 +221,7 @@ export function BillsPage() {
                     type="text"
                     value={newSectionName}
                     onChange={(e) => setNewSectionName(e.target.value)}
-                    placeholder="New section name"
+                    placeholder={t("bills.newSectionName")}
                     className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   />
                   <button
@@ -228,14 +230,14 @@ export function BillsPage() {
                     disabled={addingSection || !newSectionName.trim()}
                     className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {addingSection ? "Adding…" : "Add"}
+                    {addingSection ? t("bills.adding") : t("bills.add")}
                   </button>
                 </div>
               )}
             </div>
 
             <TextInput
-              label="Title"
+              label={t("bills.title")}
               value={form.title}
               onChange={(v) => updateForm("title", v)}
             />
@@ -243,7 +245,7 @@ export function BillsPage() {
 
           <div className="grid gap-3 sm:grid-cols-3">
             <TextInput
-              label="Amount (Principal)"
+              label={t("bills.billAmount")}
               type="number"
               required
               value={form.amount}
@@ -251,7 +253,7 @@ export function BillsPage() {
               error={showError("amount")}
             />
             <TextInput
-              label="Bill Date"
+              label={t("bills.billDate")}
               type="date"
               required
               value={form.billDate}
@@ -260,7 +262,7 @@ export function BillsPage() {
             />
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-slate-700">
-                Status
+                {t("bills.status")}
               </label>
               <select
                 value={form.status}
@@ -272,16 +274,16 @@ export function BillsPage() {
                     : "border-slate-200 focus:border-primary-500 focus:ring-primary-500")
                 }
               >
-                <option value="unpaid">Unpaid</option>
-                <option value="partial_paid">Partial Paid</option>
-                <option value="paid">Paid</option>
+                <option value="unpaid">{t("bills.unpaid")}</option>
+                <option value="partial_paid">{t("bills.partialPaid")}</option>
+                <option value="paid">{t("bills.paid")}</option>
               </select>
             </div>
           </div>
 
           {form.status === "partial_paid" && (
             <TextInput
-              label="Amount paid (₹)"
+              label={t("bills.amountPaid")}
               type="number"
               required
               value={form.paidAmount}
@@ -292,13 +294,13 @@ export function BillsPage() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <TextInput
-              label="Vendor Name (optional)"
+              label={t("bills.vendorName")}
               value={form.vendorName}
               onChange={(v) => updateForm("vendorName", v)}
             />
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-slate-700">
-                Bill Image (optional)
+                {t("bills.billImage")}
               </label>
               {imageFile && (
                 <div className="flex gap-2 items-center mb-2">
@@ -307,7 +309,7 @@ export function BillsPage() {
                     alt="Preview"
                     className="h-16 w-16 rounded-lg object-cover border border-slate-200"
                   />
-                  <span className="text-xs text-slate-500">Preview</span>
+                  <span className="text-xs text-slate-500">{t("bills.preview")}</span>
                 </div>
               )}
               <input
@@ -316,20 +318,20 @@ export function BillsPage() {
                 onChange={(e) => setImageFile(e.target.files?.[0] || null)}
                 className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-200 file:bg-slate-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-100"
               />
-              <p className="text-[10px] text-slate-400">Max size 5MB.</p>
+              <p className="text-[10px] text-slate-400">{t("bills.maxSize")}</p>
             </div>
           </div>
 
           <div className="space-y-1.5">
             <label className="block text-xs font-medium text-slate-700">
-              Notes (optional)
+              {t("bills.notes")}
             </label>
             <textarea
               rows={2}
               value={form.notes}
               onChange={(e) => updateForm("notes", e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-              placeholder="Any remarks about this bill…"
+              placeholder=""
             />
           </div>
 
@@ -345,10 +347,10 @@ export function BillsPage() {
                   }
                   className="h-3.5 w-3.5 rounded border-primary-400 text-primary-600 focus:ring-primary-500"
                 />
-                Enable Interest
+                {t("bills.enableInterest")}
               </label>
               <span className="text-[10px] text-primary-700">
-                Simple/compound · Daily/Monthly
+                {t("bills.simpleCompound")}
               </span>
             </div>
 
@@ -356,20 +358,20 @@ export function BillsPage() {
               <div className="mt-2 grid gap-2 sm:grid-cols-4">
                 <div className="space-y-1">
                   <label className="block text-[10px] font-medium text-primary-900">
-                    Type
+                    {t("bills.type")}
                   </label>
                   <select
                     value={form.interestType}
                     onChange={(e) => updateForm("interestType", e.target.value)}
                     className="w-full rounded-lg border border-primary-100 bg-white px-2 py-1.5 text-xs outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   >
-                    <option value="simple">Simple</option>
-                    <option value="compound">Compound</option>
+                    <option value="simple">{t("bills.simple")}</option>
+                    <option value="compound">{t("bills.compound")}</option>
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[10px] font-medium text-primary-900">
-                    Frequency
+                    {t("bills.frequency")}
                   </label>
                   <select
                     value={form.interestFrequency}
@@ -378,19 +380,19 @@ export function BillsPage() {
                     }
                     className="w-full rounded-lg border border-primary-100 bg-white px-2 py-1.5 text-xs outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="monthly">Monthly</option>
+                    <option value="daily">{t("bills.daily")}</option>
+                    <option value="monthly">{t("bills.monthly")}</option>
                   </select>
                 </div>
                 <TextInput
-                  label="Rate % per period"
+                  label={t("bills.interestRate")}
                   type="number"
                   value={form.interestRate}
                   onChange={(v) => updateForm("interestRate", v)}
                   error={showError("interestRate")}
                 />
                 <TextInput
-                  label="Start Date"
+                  label={t("bills.startDate")}
                   type="date"
                   value={form.interestStartDate}
                   onChange={(v) => updateForm("interestStartDate", v)}
@@ -407,7 +409,7 @@ export function BillsPage() {
               }
               className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-slate-800 disabled:opacity-60"
             >
-              {submitting ? "Saving…" : "Save Bill"}
+              {submitting ? t("bills.saving") : t("bills.saveBill")}
             </button>
           </div>
         </form>

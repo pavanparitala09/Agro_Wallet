@@ -15,10 +15,13 @@ import {
   Legend,
 } from "recharts";
 import { api } from "../lib/api.js";
+import { useTranslation } from "react-i18next";
+
 
 const PIE_COLORS = ["#22c55e", "#ef4444"];
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const [summary, setSummary] = useState(null);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -129,7 +132,7 @@ export function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex-1">
             <h2 className="text-2xl md:text-3xl font-black text-slate-700">
-              📊 Overview
+              📊 {t("layout.dashboard")}
             </h2>
             <p className="text-base font-semibold text-slate-800 mt-2">
               Interest is calculated dynamically until a bill is marked as paid.
@@ -144,12 +147,12 @@ export function DashboardPage() {
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
         <SummaryCard
-          title="Total Principal"
+          title={t("dashboard.totalPrincipal")}
           value={`₹ ${summary.totalPrincipal.toFixed(2)}`}
           gradient="from-emerald-500 to-emerald-600"
         />
         <SummaryCard
-          title="Total Interest"
+          title={t("dashboard.totalInterest")}
           value={`₹ ${summary.totalInterest.toFixed(2)}`}
           gradient="from-orange-500 to-orange-600"
         />
